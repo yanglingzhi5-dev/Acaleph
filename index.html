@@ -8,116 +8,125 @@
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
   />
 
-  <title>ACALEPH</title>
+  <title>ACALEPH: Deep Drift</title>
 
   <link rel="stylesheet" href="style.css" />
-
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
-      }
-    }
-  </script>
 </head>
 
 <body>
-  <main class="app">
-    <canvas id="scene"></canvas>
+  <main class="game-shell">
+    <canvas id="gameCanvas"></canvas>
 
-    <section id="intro" class="intro">
-      <div class="intro-glow"></div>
+    <section id="startScreen" class="screen">
+      <div class="start-panel">
+        <div class="start-topline">
+          <span>01</span>
+          <span>WIRE DEEP SEA</span>
+        </div>
 
-      <div class="intro-content">
-        <p class="tag">Interactive Mobile Experience</p>
+        <div class="title-block">
+          <p class="eyebrow">Mobile Web Game</p>
+          <h1>ACALEPH</h1>
+          <p class="subtitle">Deep Drift</p>
+        </div>
 
-        <h1>ACALEPH</h1>
-
-        <p class="subtitle">
-          A tiny glowing jellyfish living inside your screen.
-        </p>
+        <div class="start-copy">
+          <p>
+            Guide a luminous wireframe jellyfish through a deep digital ocean.
+            Collect blue crystals. Avoid red mines. Stay alive as the sea becomes faster.
+          </p>
+        </div>
 
         <button id="startButton" class="main-button">
-          Wake it up
+          Start Drift
         </button>
 
-        <p class="small-note">
-          Touch gently. Hold to calm it. Move slowly to guide it.
-        </p>
-      </div>
-    </section>
-
-    <section id="result" class="result hidden">
-      <div class="result-card">
-        <p class="tag">Final Form</p>
-
-        <h2 id="resultTitle">Gentle Bloom</h2>
-
-        <p id="resultText">
-          Your touch made Acaleph feel safe enough to glow.
-        </p>
-
-        <div class="result-stats">
+        <div class="controls-grid">
           <div>
-            <span>Trust</span>
-            <strong id="finalTrust">0%</strong>
+            <span>Phone</span>
+            <p>Hold + drag</p>
           </div>
 
           <div>
-            <span>Mood</span>
-            <strong id="finalMood">Calm</strong>
+            <span>Desktop</span>
+            <p>Mouse / WASD</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="gameOverScreen" class="screen hidden">
+      <div class="start-panel">
+        <div class="start-topline">
+          <span>END</span>
+          <span>THE LIGHT FADED</span>
+        </div>
+
+        <div class="title-block">
+          <p class="eyebrow">Drift Complete</p>
+          <h2>Game Over</h2>
+        </div>
+
+        <div class="score-box">
+          <div>
+            <span>Score</span>
+            <strong id="finalScore">0</strong>
+          </div>
+
+          <div>
+            <span>Best</span>
+            <strong id="bestScore">0</strong>
+          </div>
+
+          <div>
+            <span>Depth</span>
+            <strong id="finalDepth">0m</strong>
           </div>
         </div>
 
+        <p id="finalMessage" class="end-message">
+          The deep remembers your glow.
+        </p>
+
         <button id="restartButton" class="main-button">
-          Play again
+          Drift Again
         </button>
       </div>
     </section>
 
-    <header id="topUI" class="top-ui hidden">
-      <div>
-        <p class="mini-label">ACALEPH</p>
-        <h2 id="moodTitle">Still asleep</h2>
+    <header id="hud" class="hud hidden">
+      <div class="hud-card">
+        <span>Score</span>
+        <strong id="scoreText">0</strong>
       </div>
 
-      <button id="infoButton" class="circle-button">?</button>
+      <div class="hud-card center">
+        <span>Depth</span>
+        <strong id="depthText">0m</strong>
+      </div>
+
+      <div class="hud-card right">
+        <span>Level</span>
+        <strong id="levelText">1</strong>
+      </div>
     </header>
 
-    <div id="progressRing" class="progress-ring hidden">
-      <span></span>
-      <span></span>
-      <span></span>
-      <span></span>
-      <span></span>
-      <span></span>
-      <span></span>
-      <span></span>
+    <div id="energyUI" class="energy-ui hidden">
+      <div class="energy-meta">
+        <span>Energy</span>
+        <span id="energyPercent">100%</span>
+      </div>
+
+      <div class="energy-bar">
+        <div id="energyFill"></div>
+      </div>
     </div>
 
     <div id="tip" class="tip hidden">
-      <p id="tipText">Move slowly. It is watching your touch.</p>
+      Collect blue wire crystals. Avoid red rotating mines.
     </div>
-
-    <aside id="infoPanel" class="info-panel hidden">
-      <button id="closeInfo" class="close-button">×</button>
-
-      <p class="tag">About</p>
-
-      <h2>ACALEPH</h2>
-
-      <p>
-        Acaleph is a mobile-first interactive artwork. It turns touch into
-        trust, fear, movement, and glow.
-      </p>
-
-      <p>
-        Try gentle taps, slow movement, long holds, and stillness. If you move
-        too fast, it becomes afraid.
-      </p>
-    </aside>
   </main>
 
-  <script type="module" src="script.js"></script>
+  <script src="script.js"></script>
 </body>
 </html>

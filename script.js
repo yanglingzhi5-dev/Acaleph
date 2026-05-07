@@ -1,746 +1,1329 @@
-import * as THREE from "three";
+const canvas = document.querySelector("#gameCanvas");
+const ctx = canvas.getContext("2d");
 
-const canvas = document.querySelector("#scene");
-
-const intro = document.querySelector("#intro");
-const result = document.querySelector("#result");
+const startScreen = document.querySelector("#startScreen");
+const gameOverScreen = document.querySelector("#gameOverScreen");
 const startButton = document.querySelector("#startButton");
 const restartButton = document.querySelector("#restartButton");
 
-const topUI = document.querySelector("#topUI");
-const moodTitle = document.querySelector("#moodTitle");
+const hud = document.querySelector("#hud");
+const scoreText = document.querySelector("#scoreText");
+const depthText = document.querySelector("#depthText");
+const levelText = document.querySelector("#levelText");
+
+const energyUI = document.querySelector("#energyUI");
+const energyFill = document.querySelector("#energyFill");
+const energyPercent = document.querySelector("#energyPercent");
+
 const tip = document.querySelector("#tip");
-const tipText = document.querySelector("#tipText");
-const progressRing = document.querySelector("#progressRing");
-const progressDots = document.querySelectorAll("#progressRing span");
 
-const infoButton = document.querySelector("#infoButton");
-const infoPanel = document.querySelector("#infoPanel");
-const closeInfo = document.querySelector("#closeInfo");
-
-const resultTitle = document.querySelector("#resultTitle");
-const resultText = document.querySelector("#resultText");
-const finalTrust = document.querySelector("#finalTrust");
-const finalMood = document.querySelector("#finalMood");
+const finalScore = document.querySelector("#finalScore");
+const bestScore = document.querySelector("#bestScore");
+const finalDepth = document.querySelector("#finalDepth");
+const finalMessage = document.querySelector("#finalMessage");
 
 let width = window.innerWidth;
 let height = window.innerHeight;
+let dpr = Math.min(window.devicePixelRatio || 1, 1.7);
 
-let started = false;
-let finished = false;
+let gameState = "start";
 
-const state = {
-  trust: 0,
-  fear: 0.22,
-  energy: 0.45,
-  bloom: 0,
-  pointerX: 0,
-  pointerY: 0,
-  smoothX: 0,
-  smoothY: 0,
-  lastX: 0,
-  lastY: 0,
-  speed: 0,
-  touching: false,
-  touchStartTime: 0,
-  stillness: 0,
-  lastMoveTime: performance.now(),
-  mood: "Sleeping"
+let score = 0;
+let best = Number(localStorage.getItem("acalephBestScore")) || 0;
+let energy = 100;
+let depth = 0;
+let difficulty = 1;
+let level = 1;
+
+let lastTime = 0;
+let lightTimer = 0;
+let enemyTimer = 0;
+let bubbleTimer = 0;
+
+let screenShake = 0;
+let damageFlash = 0;
+
+const keys = {
+  up: false,
+  down: false,
+  left: false,
+  right: false
 };
 
-const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x050713, 0.065);
+const player = {
+  x: width / 2,
+  y: height * 0.68,
+  targetX: width / 2,
+  targetY: height * 0.68,
+  radius: 30,
+  glow: 1,
+  invincible: 0,
+  tail: [],
+  angle: 0,
+  tilt: 0,
+  side: 0
+};
 
-const camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 100);
-camera.position.set(0, 0.15, 6.4);
+const lights = [];
+const enemies = [];
+const bubbles = [];
+const particles = [];
+const currents = [];
+const gridLines = [];
 
-const renderer = new THREE.WebGLRenderer({
-  canvas,
-  antialias: true,
-  alpha: true,
-  powerPreference: "high-performance"
-});
+function setupOceanLines() {
+  currents.length = 0;
+  gridLines.length = 0;
 
-renderer.setSize(width, height);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.35));
-renderer.outputColorSpace = THREE.SRGBColorSpace;
+  for (let i = 0; i < 34; i++) {
+    currents.push({
+      x: Math.random() * width,
+      y: Math.random() * height,
+      length: 70 + Math.random() * 150,
+      speed: 14 + Math.random() * 30,
+      alpha: 0.035 + Math.random() * 0.065,
+      sway: Math.random() * 80
+    });
+  }
 
-const clock = new THREE.Clock();
-
-const world = new THREE.Group();
-scene.add(world);
-
-const acaleph = new THREE.Group();
-world.add(acaleph);
-
-const background = new THREE.Group();
-scene.add(background);
-
-const textureLoader = new THREE.TextureLoader();
-
-const bodyMaterial = new THREE.MeshPhysicalMaterial({
-  color: 0x8ff6ff,
-  roughness: 0.22,
-  metalness: 0.02,
-  transparent: true,
-  opacity: 0.54,
-  transmission: 0.25,
-  thickness: 0.8,
-  clearcoat: 0.65,
-  clearcoatRoughness: 0.18,
-  emissive: 0x173b52,
-  emissiveIntensity: 0.6
-});
-
-const glowMaterial = new THREE.MeshBasicMaterial({
-  color: 0x9ff8ff,
-  transparent: true,
-  opacity: 0.7,
-  blending: THREE.AdditiveBlending,
-  depthWrite: false
-});
-
-const pinkGlowMaterial = new THREE.MeshBasicMaterial({
-  color: 0xff9bd8,
-  transparent: true,
-  opacity: 0.55,
-  blending: THREE.AdditiveBlending,
-  depthWrite: false
-});
-
-const darkMaterial = new THREE.MeshBasicMaterial({
-  color: 0x101428,
-  transparent: true,
-  opacity: 0.92
-});
-
-const bellGeometry = new THREE.SphereGeometry(1, 64, 64);
-const bell = new THREE.Mesh(bellGeometry, bodyMaterial);
-bell.scale.set(1.22, 0.72, 1.22);
-bell.position.y = 0.32;
-acaleph.add(bell);
-
-const coreGeometry = new THREE.SphereGeometry(0.42, 42, 42);
-const core = new THREE.Mesh(coreGeometry, glowMaterial);
-core.position.y = 0.22;
-acaleph.add(core);
-
-const haloGeometry = new THREE.TorusGeometry(1.08, 0.018, 12, 120);
-const halo = new THREE.Mesh(haloGeometry, glowMaterial.clone());
-halo.rotation.x = Math.PI / 2;
-halo.position.y = 0.27;
-halo.material.opacity = 0.34;
-acaleph.add(halo);
-
-const cheekGeometry = new THREE.SphereGeometry(0.115, 24, 24);
-
-const leftCheek = new THREE.Mesh(cheekGeometry, pinkGlowMaterial.clone());
-leftCheek.position.set(-0.39, 0.18, 0.85);
-leftCheek.scale.set(1, 0.72, 0.35);
-acaleph.add(leftCheek);
-
-const rightCheek = new THREE.Mesh(cheekGeometry, pinkGlowMaterial.clone());
-rightCheek.position.set(0.39, 0.18, 0.85);
-rightCheek.scale.set(1, 0.72, 0.35);
-acaleph.add(rightCheek);
-
-const eyeGeometry = new THREE.SphereGeometry(0.07, 20, 20);
-
-const leftEye = new THREE.Mesh(eyeGeometry, darkMaterial);
-leftEye.position.set(-0.22, 0.35, 0.9);
-leftEye.scale.set(1, 1.5, 0.35);
-acaleph.add(leftEye);
-
-const rightEye = new THREE.Mesh(eyeGeometry, darkMaterial);
-rightEye.position.set(0.22, 0.35, 0.9);
-rightEye.scale.set(1, 1.5, 0.35);
-acaleph.add(rightEye);
-
-const finGeometry = new THREE.SphereGeometry(0.26, 28, 28);
-
-const leftFin = new THREE.Mesh(finGeometry, bodyMaterial.clone());
-leftFin.position.set(-0.92, 0.18, 0.04);
-leftFin.scale.set(0.35, 0.55, 0.75);
-leftFin.rotation.z = 0.5;
-acaleph.add(leftFin);
-
-const rightFin = new THREE.Mesh(finGeometry, bodyMaterial.clone());
-rightFin.position.set(0.92, 0.18, 0.04);
-rightFin.scale.set(0.35, 0.55, 0.75);
-rightFin.rotation.z = -0.5;
-acaleph.add(rightFin);
-
-const tentacles = [];
-const tentacleCount = 10;
-const tentacleSegments = 26;
-
-for (let i = 0; i < tentacleCount; i++) {
-  const geometry = new THREE.BufferGeometry();
-  const positions = new Float32Array(tentacleSegments * 3);
-
-  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-
-  const material = new THREE.LineBasicMaterial({
-    color: i % 2 === 0 ? 0x92f6ff : 0xff9bd8,
-    transparent: true,
-    opacity: 0.55,
-    blending: THREE.AdditiveBlending
-  });
-
-  const line = new THREE.Line(geometry, material);
-  acaleph.add(line);
-
-  tentacles.push({
-    line,
-    angle: (i / tentacleCount) * Math.PI * 2,
-    offset: Math.random() * Math.PI * 2,
-    length: 1.05 + Math.random() * 0.45
-  });
+  for (let i = 0; i < 16; i++) {
+    gridLines.push({
+      y: i * (height / 15),
+      speed: 20 + Math.random() * 12
+    });
+  }
 }
 
-const bloomPetals = [];
-const petalGeometry = new THREE.SphereGeometry(0.33, 28, 28);
+function resizeCanvas() {
+  width = window.innerWidth;
+  height = window.innerHeight;
+  dpr = Math.min(window.devicePixelRatio || 1, 1.7);
 
-for (let i = 0; i < 8; i++) {
-  const petal = new THREE.Mesh(petalGeometry, pinkGlowMaterial.clone());
+  canvas.width = Math.floor(width * dpr);
+  canvas.height = Math.floor(height * dpr);
+  canvas.style.width = `${width}px`;
+  canvas.style.height = `${height}px`;
 
-  const angle = (i / 8) * Math.PI * 2;
-  petal.position.set(Math.cos(angle) * 0.78, 0.15, Math.sin(angle) * 0.78);
-  petal.scale.set(0.38, 0.12, 0.7);
-  petal.rotation.y = -angle;
-  petal.material.opacity = 0;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  acaleph.add(petal);
+  setupOceanLines();
 
-  bloomPetals.push({
-    mesh: petal,
-    angle
-  });
+  if (gameState === "start" || gameState === "over") {
+    player.x = width / 2;
+    player.y = height * 0.68;
+    player.targetX = player.x;
+    player.targetY = player.y;
+  }
 }
-
-const dustCount = 260;
-const dustPositions = new Float32Array(dustCount * 3);
-const dustSeeds = [];
-
-for (let i = 0; i < dustCount; i++) {
-  const radius = 1.2 + Math.random() * 2.7;
-  const angle = Math.random() * Math.PI * 2;
-  const y = -1.3 + Math.random() * 2.9;
-
-  dustPositions[i * 3] = Math.cos(angle) * radius;
-  dustPositions[i * 3 + 1] = y;
-  dustPositions[i * 3 + 2] = Math.sin(angle) * radius;
-
-  dustSeeds.push({
-    radius,
-    angle,
-    y,
-    speed: 0.14 + Math.random() * 0.42
-  });
-}
-
-const dustGeometry = new THREE.BufferGeometry();
-dustGeometry.setAttribute("position", new THREE.BufferAttribute(dustPositions, 3));
-
-const dustMaterial = new THREE.PointsMaterial({
-  color: 0xbaf8ff,
-  size: 0.032,
-  transparent: true,
-  opacity: 0.55,
-  blending: THREE.AdditiveBlending,
-  depthWrite: false
-});
-
-const dust = new THREE.Points(dustGeometry, dustMaterial);
-acaleph.add(dust);
-
-const starCount = 180;
-const starPositions = new Float32Array(starCount * 3);
-
-for (let i = 0; i < starCount; i++) {
-  starPositions[i * 3] = (Math.random() - 0.5) * 13;
-  starPositions[i * 3 + 1] = (Math.random() - 0.5) * 10;
-  starPositions[i * 3 + 2] = -2 - Math.random() * 8;
-}
-
-const starGeometry = new THREE.BufferGeometry();
-starGeometry.setAttribute("position", new THREE.BufferAttribute(starPositions, 3));
-
-const starMaterial = new THREE.PointsMaterial({
-  color: 0xffffff,
-  size: 0.018,
-  transparent: true,
-  opacity: 0.36,
-  blending: THREE.AdditiveBlending
-});
-
-const stars = new THREE.Points(starGeometry, starMaterial);
-background.add(stars);
-
-const ripples = [];
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
-function lerp(a, b, t) {
-  return a + (b - a) * t;
+function random(min, max) {
+  return min + Math.random() * (max - min);
 }
 
-function toNDC(clientX, clientY) {
+function dist(a, b) {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+function showPlayingUI() {
+  hud.classList.remove("hidden");
+  energyUI.classList.remove("hidden");
+  tip.classList.remove("hidden");
+}
+
+function hidePlayingUI() {
+  hud.classList.add("hidden");
+  energyUI.classList.add("hidden");
+  tip.classList.add("hidden");
+}
+
+function resetGame() {
+  score = 0;
+  energy = 100;
+  depth = 0;
+  difficulty = 1;
+  level = 1;
+
+  lightTimer = 0;
+  enemyTimer = 0.8;
+  bubbleTimer = 0;
+
+  screenShake = 0;
+  damageFlash = 0;
+
+  lights.length = 0;
+  enemies.length = 0;
+  bubbles.length = 0;
+  particles.length = 0;
+
+  player.x = width / 2;
+  player.y = height * 0.68;
+  player.targetX = width / 2;
+  player.targetY = height * 0.68;
+  player.glow = 1;
+  player.invincible = 0;
+  player.tail.length = 0;
+  player.angle = 0;
+  player.tilt = 0;
+  player.side = 0;
+
+  scoreText.textContent = "0";
+  depthText.textContent = "0m";
+  levelText.textContent = "1";
+
+  energyPercent.textContent = "100%";
+  energyFill.style.width = "100%";
+  energyFill.style.background = "linear-gradient(90deg, #43dfff, #8ff4ff)";
+}
+
+function startGame() {
+  resetGame();
+  gameState = "playing";
+
+  startScreen.classList.add("hidden");
+  gameOverScreen.classList.add("hidden");
+
+  showPlayingUI();
+}
+
+function endGame() {
+  gameState = "over";
+
+  if (score > best) {
+    best = score;
+    localStorage.setItem("acalephBestScore", String(best));
+    finalMessage.textContent = "New best drift. Your wire glow reached a deeper layer.";
+  } else if (depth > 1200) {
+    finalMessage.textContent = "You survived the pressure zone. The deep almost let you pass.";
+  } else if (depth > 700) {
+    finalMessage.textContent = "A strong descent through the wire ocean. The current remembers your path.";
+  } else {
+    finalMessage.textContent = "The light faded before the deep became quiet.";
+  }
+
+  finalScore.textContent = score;
+  bestScore.textContent = best;
+  finalDepth.textContent = `${Math.floor(depth)}m`;
+
+  hidePlayingUI();
+  gameOverScreen.classList.remove("hidden");
+}
+
+function getDifficultyByDepth() {
+  const base = 1 + depth / 170;
+  const pressure = Math.pow(depth / 900, 1.35);
+  return base + pressure;
+}
+
+function getLevelByDepth() {
+  return Math.min(15, 1 + Math.floor(depth / 150));
+}
+
+function spawnLight() {
+  const size = random(13, 19);
+
+  lights.push({
+    x: random(34, width - 34),
+    y: -50,
+    z: random(-70, 90),
+    radius: size,
+    speed: random(110, 155) + difficulty * 10,
+    drift: random(-18, 18),
+    rotation: random(0, Math.PI * 2),
+    spin: random(-2.4, 2.4),
+    value: 10 + Math.floor(level * 1.5)
+  });
+}
+
+function createEnemy(type, xOffset) {
+  let size = random(22, 32);
+  let speed = random(130, 190) + difficulty * 18;
+  let drift = random(-28, 28);
+  let damage = 22 + Math.floor(difficulty * 1.45);
+
+  if (type === "wide") {
+    size = random(36, 48);
+    speed = random(105, 145) + difficulty * 13;
+    drift = random(-16, 16);
+    damage = 30 + Math.floor(difficulty * 1.6);
+  }
+
+  if (type === "fast") {
+    size = random(18, 25);
+    speed = random(230, 310) + difficulty * 22;
+    drift = random(-10, 10);
+    damage = 20 + Math.floor(difficulty * 1.2);
+  }
+
+  if (type === "sine") {
+    size = random(22, 30);
+    speed = random(135, 185) + difficulty * 16;
+    drift = random(70, 115);
+    damage = 24 + Math.floor(difficulty * 1.35);
+  }
+
+  enemies.push({
+    type,
+    x: clamp(random(40, width - 40) + xOffset, 40, width - 40),
+    baseX: 0,
+    y: -80,
+    z: random(-80, 110),
+    radius: size,
+    speed,
+    drift,
+    rotationX: random(0, Math.PI * 2),
+    rotationY: random(0, Math.PI * 2),
+    spinX: random(-1.8, 1.8),
+    spinY: random(-2.2, 2.2),
+    damage,
+    phase: random(0, Math.PI * 2)
+  });
+
+  enemies[enemies.length - 1].baseX = enemies[enemies.length - 1].x;
+}
+
+function pickEnemyType() {
+  const roll = Math.random();
+
+  if (level < 3) {
+    return "normal";
+  }
+
+  if (level < 5) {
+    if (roll < 0.25) return "fast";
+    return "normal";
+  }
+
+  if (level < 8) {
+    if (roll < 0.24) return "fast";
+    if (roll < 0.46) return "wide";
+    if (roll < 0.68) return "sine";
+    return "normal";
+  }
+
+  if (roll < 0.28) return "fast";
+  if (roll < 0.52) return "sine";
+  if (roll < 0.72) return "wide";
+  return "normal";
+}
+
+function spawnEnemyWave() {
+  const waveCount = level >= 9 ? 3 : level >= 5 ? 2 : 1;
+
+  for (let i = 0; i < waveCount; i++) {
+    const offset = waveCount === 1 ? 0 : (i - (waveCount - 1) / 2) * random(85, 130);
+    createEnemy(pickEnemyType(), offset);
+  }
+
+  if (level >= 11 && Math.random() < 0.3) {
+    setTimeout(() => {
+      if (gameState === "playing") {
+        createEnemy("fast", random(-120, 120));
+      }
+    }, 260);
+  }
+}
+
+function spawnBubble() {
+  bubbles.push({
+    x: random(0, width),
+    y: height + 20,
+    radius: random(2, 8),
+    speed: random(20, 64),
+    alpha: random(0.07, 0.2),
+    drift: random(-12, 12)
+  });
+}
+
+function createParticles(x, y, color, count, speed) {
+  for (let i = 0; i < count; i++) {
+    const angle = random(0, Math.PI * 2);
+    const force = random(speed * 0.28, speed);
+
+    particles.push({
+      x,
+      y,
+      vx: Math.cos(angle) * force,
+      vy: Math.sin(angle) * force,
+      radius: random(1.2, 3.8),
+      life: 1,
+      decay: random(0.018, 0.035),
+      color
+    });
+  }
+}
+
+function projectPoint(point, centerX, centerY, scale, perspective) {
+  const factor = perspective / (perspective + point.z);
+
   return {
-    x: (clientX / width) * 2 - 1,
-    y: -(clientY / height) * 2 + 1
+    x: centerX + point.x * scale * factor,
+    y: centerY + point.y * scale * factor,
+    f: factor
   };
 }
 
-function createRipple(x, y, color) {
-  const geometry = new THREE.RingGeometry(0.08, 0.083, 64);
+function rotatePoint(point, ax, ay, az) {
+  let x = point.x;
+  let y = point.y;
+  let z = point.z;
 
-  const material = new THREE.MeshBasicMaterial({
-    color,
-    transparent: true,
-    opacity: 0.7,
-    blending: THREE.AdditiveBlending,
-    side: THREE.DoubleSide,
-    depthWrite: false
+  let cos = Math.cos(ax);
+  let sin = Math.sin(ax);
+
+  let y1 = y * cos - z * sin;
+  let z1 = y * sin + z * cos;
+  y = y1;
+  z = z1;
+
+  cos = Math.cos(ay);
+  sin = Math.sin(ay);
+
+  let x1 = x * cos + z * sin;
+  z1 = -x * sin + z * cos;
+  x = x1;
+  z = z1;
+
+  cos = Math.cos(az);
+  sin = Math.sin(az);
+
+  x1 = x * cos - y * sin;
+  y1 = x * sin + y * cos;
+
+  return {
+    x: x1,
+    y: y1,
+    z
+  };
+}
+
+function drawLine3D(points, edges, cx, cy, scale, rotation, color, alpha, lineWidth) {
+  ctx.save();
+
+  const projected = [];
+
+  for (let i = 0; i < points.length; i++) {
+    const rotated = rotatePoint(points[i], rotation.x, rotation.y, rotation.z);
+    projected.push(projectPoint(rotated, cx, cy, scale, 420));
+  }
+
+  for (let i = 0; i < edges.length; i++) {
+    const a = projected[edges[i][0]];
+    const b = projected[edges[i][1]];
+
+    const avgF = (a.f + b.f) / 2;
+    const lineAlpha = alpha * clamp(avgF, 0.45, 1.2);
+
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = lineAlpha;
+    ctx.lineWidth = lineWidth * clamp(avgF, 0.7, 1.25);
+
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+function updatePlayer(dt) {
+  const keyboardSpeed = 390;
+
+  if (keys.left) player.targetX -= keyboardSpeed * dt;
+  if (keys.right) player.targetX += keyboardSpeed * dt;
+  if (keys.up) player.targetY -= keyboardSpeed * dt;
+  if (keys.down) player.targetY += keyboardSpeed * dt;
+
+  player.targetX = clamp(player.targetX, 30, width - 30);
+  player.targetY = clamp(player.targetY, 90, height - 90);
+
+  const dx = player.targetX - player.x;
+  const dy = player.targetY - player.y;
+
+  player.x += dx * 0.16;
+  player.y += dy * 0.16;
+
+  player.angle = Math.atan2(dx, 80);
+
+  const targetSide = clamp(dx / 95, -1, 1);
+  player.side += (targetSide - player.side) * 0.12;
+
+  const targetTilt = clamp(dx / 140, -0.9, 0.9);
+  player.tilt += (targetTilt - player.tilt) * 0.1;
+
+  player.tail.push({
+    x: player.x,
+    y: player.y,
+    side: player.side,
+    life: 1
   });
 
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.position.set(x * 2.4, y * 2.9, 1.6);
-
-  scene.add(mesh);
-
-  ripples.push({
-    mesh,
-    life: 0,
-    maxLife: 0.85
-  });
-}
-
-function updateMood() {
-  if (!started) {
-    state.mood = "Sleeping";
-  } else if (state.bloom > 0.92) {
-    state.mood = "Blooming";
-  } else if (state.fear > 0.62) {
-    state.mood = "Scared";
-  } else if (state.trust > 0.68) {
-    state.mood = "Trusting";
-  } else if (state.trust > 0.34) {
-    state.mood = "Curious";
-  } else {
-    state.mood = "Shy";
+  if (player.tail.length > 32) {
+    player.tail.shift();
   }
 
-  if (state.mood === "Scared") {
-    moodTitle.textContent = "Acaleph is scared";
-  } else if (state.mood === "Trusting") {
-    moodTitle.textContent = "Acaleph trusts you";
-  } else if (state.mood === "Curious") {
-    moodTitle.textContent = "Acaleph is curious";
-  } else if (state.mood === "Blooming") {
-    moodTitle.textContent = "Acaleph is blooming";
-  } else {
-    moodTitle.textContent = "Acaleph is shy";
+  for (let i = 0; i < player.tail.length; i++) {
+    player.tail[i].life -= dt * 1.2;
   }
+
+  player.tail = player.tail.filter(point => point.life > 0);
+
+  if (player.invincible > 0) {
+    player.invincible -= dt;
+  }
+
+  player.glow += (energy / 100 - player.glow) * 0.04;
 }
 
-function updateTip() {
-  if (state.mood === "Scared") {
-    tipText.textContent = "Too fast. Give it a little space.";
-  } else if (state.mood === "Trusting") {
-    tipText.textContent = "Hold gently. It feels safe near you.";
-  } else if (state.bloom > 0.7) {
-    tipText.textContent = "It is blooming. Stay close.";
-  } else if (state.stillness > 2.1) {
-    tipText.textContent = "It moves closer when you stop chasing it.";
-  } else if (state.trust < 0.25) {
-    tipText.textContent = "Tap softly. Do not rush it.";
-  } else {
-    tipText.textContent = "Move slowly. Let it follow your finger.";
+function updateLights(dt, time) {
+  lightTimer -= dt;
+
+  const maxLightsOnScreen = level < 5 ? 7 : level < 9 ? 6 : 5;
+  const interval = Math.max(0.44, 0.9 - difficulty * 0.038);
+
+  if (lightTimer <= 0 && lights.length < maxLightsOnScreen) {
+    spawnLight();
+    lightTimer = interval + random(-0.08, 0.12);
+  }
+
+  for (let i = lights.length - 1; i >= 0; i--) {
+    const item = lights[i];
+
+    item.y += item.speed * dt;
+    item.x += Math.sin(time * 1.6 + item.rotation) * item.drift * dt;
+    item.rotation += item.spin * dt;
+
+    if (dist(player, item) < player.radius + item.radius * 0.8) {
+      score += item.value;
+      energy = clamp(energy + 7.2, 0, 100);
+      createParticles(item.x, item.y, "cyan", 22, 190);
+      lights.splice(i, 1);
+    } else if (item.y > height + 80) {
+      lights.splice(i, 1);
+    }
   }
 }
 
-function updateProgressDots() {
-  const activeCount = Math.floor(state.trust * progressDots.length);
+function updateEnemies(dt, time) {
+  enemyTimer -= dt;
 
-  for (let i = 0; i < progressDots.length; i++) {
-    if (i < activeCount) {
-      progressDots[i].classList.add("active");
+  const interval = Math.max(0.28, 1.05 - difficulty * 0.078);
+
+  if (enemyTimer <= 0) {
+    spawnEnemyWave();
+    enemyTimer = interval + random(-0.08, 0.1);
+  }
+
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    const item = enemies[i];
+
+    item.y += item.speed * dt;
+
+    if (item.type === "sine") {
+      item.x = item.baseX + Math.sin(time * 2.3 + item.phase) * item.drift;
     } else {
-      progressDots[i].classList.remove("active");
+      item.x += Math.sin(item.y * 0.012 + item.phase) * item.drift * dt;
+    }
+
+    if (item.type === "fast") {
+      item.rotationX += item.spinX * dt * 2.1;
+      item.rotationY += item.spinY * dt * 2.1;
+    } else {
+      item.rotationX += item.spinX * dt;
+      item.rotationY += item.spinY * dt;
+    }
+
+    if (
+      player.invincible <= 0 &&
+      dist(player, item) < player.radius + item.radius * 0.72
+    ) {
+      energy -= item.damage;
+      player.invincible = 1.05;
+      screenShake = item.type === "wide" ? 17 : 13;
+      damageFlash = 1;
+
+      createParticles(player.x, player.y, "red", 30, 240);
+
+      enemies.splice(i, 1);
+
+      if (navigator.vibrate) {
+        navigator.vibrate(item.type === "wide" ? 110 : 70);
+      }
+    } else if (item.y > height + 100) {
+      enemies.splice(i, 1);
     }
   }
 }
 
-function showGameUI() {
-  topUI.classList.remove("hidden");
-  tip.classList.remove("hidden");
-  progressRing.classList.remove("hidden");
+function updateBubbles(dt) {
+  bubbleTimer -= dt;
+
+  if (bubbleTimer <= 0) {
+    spawnBubble();
+    bubbleTimer = 0.07;
+  }
+
+  for (let i = bubbles.length - 1; i >= 0; i--) {
+    const item = bubbles[i];
+
+    item.y -= item.speed * dt;
+    item.x += item.drift * dt;
+
+    if (item.y < -30) {
+      bubbles.splice(i, 1);
+    }
+  }
 }
 
-function hideGameUI() {
-  topUI.classList.add("hidden");
-  tip.classList.add("hidden");
-  progressRing.classList.add("hidden");
+function updateParticles(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const item = particles[i];
+
+    item.x += item.vx * dt;
+    item.y += item.vy * dt;
+
+    item.vx *= 0.985;
+    item.vy *= 0.985;
+
+    item.life -= item.decay;
+
+    if (item.life <= 0) {
+      particles.splice(i, 1);
+    }
+  }
 }
 
-function startExperience() {
-  started = true;
-  finished = false;
+function updateCurrents(dt) {
+  for (let i = 0; i < currents.length; i++) {
+    const item = currents[i];
 
-  state.trust = 0.08;
-  state.fear = 0.2;
-  state.energy = 0.45;
-  state.bloom = 0;
-  state.touching = false;
-  state.stillness = 0;
+    item.y += item.speed * dt * (0.9 + difficulty * 0.08);
 
-  intro.classList.add("hidden");
-  result.classList.add("hidden");
-  infoPanel.classList.add("hidden");
+    if (item.y > height + item.length) {
+      item.y = -item.length;
+      item.x = Math.random() * width;
+    }
+  }
 
-  showGameUI();
+  for (let i = 0; i < gridLines.length; i++) {
+    const line = gridLines[i];
 
-  createRipple(0, 0, 0x92f6ff);
+    line.y += line.speed * dt * (0.9 + difficulty * 0.1);
+
+    if (line.y > height + 40) {
+      line.y = -40;
+    }
+  }
 }
 
-function restartExperience() {
-  startExperience();
-}
+function updateGame(dt, time) {
+  depth += dt * (28 + difficulty * 5.5);
+  difficulty = getDifficultyByDepth();
+  level = getLevelByDepth();
 
-function finishExperience() {
-  if (finished) {
+  score += Math.floor(dt * (7 + difficulty * 2.2));
+
+  const energyDrain = 5.1 + difficulty * 0.95 + Math.max(0, level - 8) * 0.22;
+  energy -= dt * energyDrain;
+  energy = clamp(energy, 0, 100);
+
+  if (energy <= 0) {
+    endGame();
     return;
   }
 
-  finished = true;
+  updatePlayer(dt);
+  updateLights(dt, time);
+  updateEnemies(dt, time);
+  updateBubbles(dt);
+  updateParticles(dt);
+  updateCurrents(dt);
 
-  const trustPercent = Math.round(state.trust * 100);
+  if (screenShake > 0) {
+    screenShake *= 0.88;
+  }
 
-  finalTrust.textContent = `${trustPercent}%`;
+  if (damageFlash > 0) {
+    damageFlash -= dt * 2.35;
+  }
 
-  if (state.fear > 0.45) {
-    resultTitle.textContent = "Sensitive Bloom";
-    resultText.textContent = "Acaleph bloomed carefully. It still remembers your fast movements.";
-    finalMood.textContent = "Sensitive";
-  } else if (state.trust > 0.88) {
-    resultTitle.textContent = "Gentle Bloom";
-    resultText.textContent = "Your touch made Acaleph feel safe enough to glow fully.";
-    finalMood.textContent = "Calm";
+  scoreText.textContent = score;
+  depthText.textContent = `${Math.floor(depth)}m`;
+  levelText.textContent = level;
+
+  const energyValue = Math.round(energy);
+  energyPercent.textContent = `${energyValue}%`;
+  energyFill.style.width = `${energyValue}%`;
+
+  if (energy < 28) {
+    energyFill.style.background = "linear-gradient(90deg, #ff406b, #ff9a5c)";
   } else {
-    resultTitle.textContent = "Quiet Bloom";
-    resultText.textContent = "Acaleph opened slowly, like a small light learning to trust.";
-    finalMood.textContent = "Quiet";
-  }
-
-  setTimeout(() => {
-    result.classList.remove("hidden");
-    hideGameUI();
-  }, 1000);
-}
-
-function handlePointerDown(event) {
-  if (!started || finished) {
-    return;
-  }
-
-  const p = toNDC(event.clientX, event.clientY);
-
-  state.touching = true;
-  state.touchStartTime = performance.now();
-  state.lastMoveTime = performance.now();
-  state.lastX = event.clientX;
-  state.lastY = event.clientY;
-  state.pointerX = p.x;
-  state.pointerY = p.y;
-  state.stillness = 0;
-
-  state.trust += 0.012;
-  state.fear += 0.008;
-
-  createRipple(p.x, p.y, 0x92f6ff);
-
-  state.trust = clamp(state.trust, 0, 1);
-  state.fear = clamp(state.fear, 0, 1);
-}
-
-function handlePointerMove(event) {
-  if (!started || finished) {
-    return;
-  }
-
-  const now = performance.now();
-  const dt = Math.max(now - state.lastMoveTime, 16);
-
-  const dx = event.clientX - state.lastX;
-  const dy = event.clientY - state.lastY;
-
-  const distance = Math.sqrt(dx * dx + dy * dy);
-  const speed = distance / dt;
-
-  const p = toNDC(event.clientX, event.clientY);
-
-  state.pointerX = p.x;
-  state.pointerY = p.y;
-  state.speed = lerp(state.speed, speed, 0.18);
-
-  state.lastX = event.clientX;
-  state.lastY = event.clientY;
-  state.lastMoveTime = now;
-  state.stillness = 0;
-
-  if (speed > 0.8) {
-    state.fear += 0.025;
-    state.trust -= 0.008;
-    state.energy += 0.02;
-  } else if (speed < 0.28) {
-    state.trust += 0.006;
-    state.fear -= 0.004;
-  }
-
-  state.trust = clamp(state.trust, 0, 1);
-  state.fear = clamp(state.fear, 0, 1);
-  state.energy = clamp(state.energy, 0, 1);
-}
-
-function handlePointerUp() {
-  if (!started || finished) {
-    return;
-  }
-
-  const holdTime = performance.now() - state.touchStartTime;
-
-  if (holdTime > 650) {
-    state.trust += 0.075;
-    state.fear -= 0.04;
-    createRipple(state.pointerX, state.pointerY, 0xff9bd8);
-  } else {
-    state.energy += 0.02;
-  }
-
-  state.touching = false;
-
-  state.trust = clamp(state.trust, 0, 1);
-  state.fear = clamp(state.fear, 0, 1);
-  state.energy = clamp(state.energy, 0, 1);
-}
-
-function updateTentacles(time) {
-  for (let i = 0; i < tentacles.length; i++) {
-    const item = tentacles[i];
-    const positions = item.line.geometry.attributes.position.array;
-
-    const afraidCurl = state.fear * 0.34;
-    const bloomLength = state.bloom * 0.7;
-
-    for (let j = 0; j < tentacleSegments; j++) {
-      const t = j / (tentacleSegments - 1);
-
-      const wave = Math.sin(time * 2 + t * 5 + item.offset) * 0.16;
-      const angle = item.angle + wave + state.smoothX * 0.18;
-
-      const topRadius = 0.32 + Math.sin(item.angle * 3) * 0.05;
-      const x = Math.cos(item.angle) * topRadius + Math.cos(angle) * t * afraidCurl;
-      const y = -0.18 - t * (item.length + bloomLength);
-      const z = Math.sin(item.angle) * topRadius + Math.sin(angle) * t * afraidCurl;
-
-      positions[j * 3] = x;
-      positions[j * 3 + 1] = y;
-      positions[j * 3 + 2] = z;
-    }
-
-    item.line.material.opacity = 0.36 + state.trust * 0.24 + state.bloom * 0.2;
-    item.line.geometry.attributes.position.needsUpdate = true;
+    energyFill.style.background = "linear-gradient(90deg, #43dfff, #8ff4ff)";
   }
 }
 
-function updateDust(time) {
-  const positions = dust.geometry.attributes.position.array;
+function drawBackground(time) {
+  const gradient = ctx.createLinearGradient(0, 0, 0, height);
 
-  for (let i = 0; i < dustCount; i++) {
-    const seed = dustSeeds[i];
-    const angle = seed.angle + time * seed.speed * 0.3;
-    const radius = seed.radius + Math.sin(time + seed.angle) * 0.08;
+  gradient.addColorStop(0, "#071a3a");
+  gradient.addColorStop(0.46, "#031026");
+  gradient.addColorStop(1, "#00020a");
 
-    positions[i * 3] = Math.cos(angle) * radius;
-    positions[i * 3 + 1] = seed.y + Math.sin(time * 0.9 + seed.angle) * 0.16;
-    positions[i * 3 + 2] = Math.sin(angle) * radius;
-  }
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
 
-  dust.geometry.attributes.position.needsUpdate = true;
-  dust.material.opacity = 0.34 + state.trust * 0.28 + state.bloom * 0.18;
-}
+  ctx.save();
 
-function updateRipples(dt) {
-  for (let i = ripples.length - 1; i >= 0; i--) {
-    const ripple = ripples[i];
+  const glow = ctx.createRadialGradient(width * 0.5, height * 0.12, 0, width * 0.5, height * 0.12, width * 0.68);
+  glow.addColorStop(0, "rgba(143, 244, 255, 0.28)");
+  glow.addColorStop(0.42, "rgba(67, 223, 255, 0.07)");
+  glow.addColorStop(1, "rgba(67, 223, 255, 0)");
 
-    ripple.life += dt;
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, width, height);
 
-    const progress = ripple.life / ripple.maxLife;
-    const scale = 1 + progress * 7;
+  ctx.restore();
 
-    ripple.mesh.scale.setScalar(scale);
-    ripple.mesh.material.opacity = (1 - progress) * 0.65;
+  ctx.save();
 
-    if (progress >= 1) {
-      scene.remove(ripple.mesh);
-      ripple.mesh.geometry.dispose();
-      ripple.mesh.material.dispose();
-      ripples.splice(i, 1);
-    }
-  }
-}
+  ctx.globalAlpha = 0.14;
+  ctx.strokeStyle = "rgba(143, 244, 255, 0.28)";
+  ctx.lineWidth = 1;
 
-function updateAcaleph(dt, time) {
-  state.smoothX = lerp(state.smoothX, state.pointerX, 0.04);
-  state.smoothY = lerp(state.smoothY, state.pointerY, 0.04);
+  for (let i = 0; i < gridLines.length; i++) {
+    const y = gridLines[i].y;
+    const perspective = 1 - y / height;
+    const gap = 36 + perspective * 60;
 
-  if (state.touching) {
-    const holdTime = performance.now() - state.touchStartTime;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+    ctx.stroke();
 
-    if (holdTime > 700 && state.speed < 0.25) {
-      state.trust += dt * 0.08;
-      state.fear -= dt * 0.045;
-    }
-  } else {
-    state.stillness += dt;
-
-    if (state.stillness > 1.4) {
-      state.trust += dt * 0.025;
-      state.fear -= dt * 0.02;
+    for (let x = -width; x < width * 2; x += gap) {
+      ctx.beginPath();
+      ctx.moveTo(width * 0.5, height * 0.08);
+      ctx.lineTo(x, height);
+      ctx.stroke();
     }
   }
 
-  if (state.trust > 0.72 && state.fear < 0.48) {
-    state.bloom += dt * 0.12;
+  ctx.restore();
+
+  ctx.save();
+
+  for (let i = 0; i < currents.length; i++) {
+    const item = currents[i];
+
+    ctx.beginPath();
+    ctx.strokeStyle = `rgba(143, 244, 255, ${item.alpha})`;
+    ctx.lineWidth = 1;
+    ctx.moveTo(item.x, item.y);
+    ctx.bezierCurveTo(
+      item.x + Math.sin(time + i) * item.sway,
+      item.y + item.length * 0.32,
+      item.x - Math.cos(time * 0.8 + i) * item.sway * 0.4,
+      item.y + item.length * 0.66,
+      item.x + Math.sin(time * 0.6 + i) * item.sway * 0.32,
+      item.y + item.length
+    );
+    ctx.stroke();
   }
 
-  if (state.bloom > 0.98) {
-    finishExperience();
+  ctx.restore();
+}
+
+function drawBubbles() {
+  ctx.save();
+
+  for (let i = 0; i < bubbles.length; i++) {
+    const item = bubbles[i];
+
+    ctx.globalAlpha = item.alpha;
+    ctx.strokeStyle = "rgba(220, 250, 255, 0.72)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(item.x, item.y, item.radius, 0, Math.PI * 2);
+    ctx.stroke();
   }
 
-  state.fear -= dt * 0.035;
-  state.energy -= dt * 0.018;
+  ctx.restore();
+}
 
-  state.trust = clamp(state.trust, 0, 1);
-  state.fear = clamp(state.fear, 0, 1);
-  state.energy = clamp(state.energy, 0.18, 1);
-  state.bloom = clamp(state.bloom, 0, 1);
+function drawWireCrystal(item) {
+  const r = item.radius;
 
-  const breathe = 1 + Math.sin(time * 2.1) * (0.025 + state.trust * 0.02);
-  const scared = 1 - state.fear * 0.12;
-  const bloomScale = 1 + state.bloom * 0.28;
+  const points = [
+    { x: 0, y: -1.1, z: 0 },
+    { x: 1, y: 0, z: 0 },
+    { x: 0, y: 0, z: 1 },
+    { x: -1, y: 0, z: 0 },
+    { x: 0, y: 0, z: -1 },
+    { x: 0, y: 1.1, z: 0 }
+  ];
 
-  acaleph.scale.setScalar(breathe * scared * bloomScale);
+  const edges = [
+    [0, 1], [0, 2], [0, 3], [0, 4],
+    [5, 1], [5, 2], [5, 3], [5, 4],
+    [1, 2], [2, 3], [3, 4], [4, 1]
+  ];
 
-  acaleph.rotation.y = lerp(acaleph.rotation.y, state.smoothX * 0.45 + Math.sin(time * 0.4) * 0.18, 0.035);
-  acaleph.rotation.x = lerp(acaleph.rotation.x, -state.smoothY * 0.22 + Math.sin(time * 0.6) * 0.05, 0.035);
+  const glow = ctx.createRadialGradient(item.x, item.y, 0, item.x, item.y, r * 4.2);
+  glow.addColorStop(0, "rgba(143, 244, 255, 0.5)");
+  glow.addColorStop(0.35, "rgba(67, 223, 255, 0.14)");
+  glow.addColorStop(1, "rgba(67, 223, 255, 0)");
 
-  if (state.fear > 0.55) {
-    acaleph.position.x = Math.sin(time * 18) * 0.055;
-    acaleph.position.y = Math.cos(time * 16) * 0.035;
-  } else {
-    acaleph.position.x = lerp(acaleph.position.x, state.smoothX * 0.22, 0.025);
-    acaleph.position.y = lerp(acaleph.position.y, state.smoothY * 0.16, 0.025);
-  }
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(item.x, item.y, r * 4.2, 0, Math.PI * 2);
+  ctx.fill();
 
-  bell.scale.x = 1.22 + Math.sin(time * 2.1) * 0.035 + state.bloom * 0.1;
-  bell.scale.y = 0.72 + Math.cos(time * 2.1) * 0.018 - state.fear * 0.06;
-  bell.scale.z = 1.22 + Math.sin(time * 2.1) * 0.035 + state.bloom * 0.1;
-
-  core.scale.setScalar(1 + state.trust * 0.18 + state.bloom * 0.45 + Math.sin(time * 3) * 0.035);
-
-  core.material.opacity = 0.52 + state.trust * 0.24 + state.bloom * 0.2;
-  core.material.color.lerpColors(
-    new THREE.Color(0x92f6ff),
-    new THREE.Color(0xff9bd8),
-    state.bloom
+  drawLine3D(
+    points,
+    edges,
+    item.x,
+    item.y,
+    r,
+    {
+      x: item.rotation * 0.7,
+      y: item.rotation,
+      z: item.rotation * 0.2
+    },
+    "rgba(170, 252, 255, 0.95)",
+    0.95,
+    1.45
   );
 
-  bodyMaterial.emissiveIntensity = 0.45 + state.trust * 0.8 + state.bloom * 0.9 - state.fear * 0.25;
-  bodyMaterial.opacity = 0.42 + state.trust * 0.14 + state.bloom * 0.16;
+  ctx.save();
+  ctx.fillStyle = "rgba(235, 255, 255, 0.9)";
+  ctx.beginPath();
+  ctx.arc(item.x, item.y, 2.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
 
-  halo.scale.setScalar(1 + state.trust * 0.18 + state.bloom * 0.45);
-  halo.rotation.z += dt * (0.25 + state.bloom * 0.6);
-  halo.material.opacity = 0.18 + state.trust * 0.16 + state.bloom * 0.28;
-
-  const blink = Math.sin(time * 3.4) > 0.96 ? 0.15 : 1;
-
-  leftEye.scale.y = lerp(leftEye.scale.y, blink * (1.5 - state.fear * 0.5), 0.25);
-  rightEye.scale.y = lerp(rightEye.scale.y, blink * (1.5 - state.fear * 0.5), 0.25);
-
-  leftFin.rotation.z = 0.5 + Math.sin(time * 2.3) * 0.18 + state.bloom * 0.15;
-  rightFin.rotation.z = -0.5 - Math.sin(time * 2.3) * 0.18 - state.bloom * 0.15;
-
-  leftCheek.material.opacity = 0.22 + state.trust * 0.35;
-  rightCheek.material.opacity = 0.22 + state.trust * 0.35;
-
-  for (let i = 0; i < bloomPetals.length; i++) {
-    const item = bloomPetals[i];
-    const petal = item.mesh;
-
-    const open = state.bloom;
-    const radius = 0.45 + open * 0.55;
-    const y = 0.1 + open * 0.12;
-
-    petal.position.x = Math.cos(item.angle) * radius;
-    petal.position.z = Math.sin(item.angle) * radius;
-    petal.position.y = y;
-
-    petal.scale.set(0.18 + open * 0.28, 0.08 + open * 0.06, 0.36 + open * 0.5);
-    petal.material.opacity = open * 0.6;
+function drawLights() {
+  for (let i = 0; i < lights.length; i++) {
+    drawWireCrystal(lights[i]);
   }
 }
 
-function resize() {
-  width = window.innerWidth;
-  height = window.innerHeight;
+function drawWireMine(item) {
+  const r = item.radius;
 
-  camera.aspect = width / height;
-  camera.updateProjectionMatrix();
+  const points = [
+    { x: 1, y: 0, z: 0 },
+    { x: -1, y: 0, z: 0 },
+    { x: 0, y: 1, z: 0 },
+    { x: 0, y: -1, z: 0 },
+    { x: 0, y: 0, z: 1 },
+    { x: 0, y: 0, z: -1 },
+    { x: 1.35, y: 0, z: 0 },
+    { x: -1.35, y: 0, z: 0 },
+    { x: 0, y: 1.35, z: 0 },
+    { x: 0, y: -1.35, z: 0 },
+    { x: 0, y: 0, z: 1.35 },
+    { x: 0, y: 0, z: -1.35 }
+  ];
 
-  renderer.setSize(width, height);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.35));
+  const edges = [
+    [0, 2], [2, 1], [1, 3], [3, 0],
+    [0, 4], [4, 1], [1, 5], [5, 0],
+    [2, 4], [4, 3], [3, 5], [5, 2],
+    [0, 6], [1, 7], [2, 8], [3, 9], [4, 10], [5, 11]
+  ];
+
+  let glowStrength = 0.46;
+  let lineColor = "rgba(255, 91, 130, 0.95)";
+  let lineWidth = 1.6;
+
+  if (item.type === "fast") {
+    glowStrength = 0.62;
+    lineColor = "rgba(255, 120, 160, 1)";
+    lineWidth = 1.35;
+  }
+
+  if (item.type === "wide") {
+    glowStrength = 0.58;
+    lineColor = "rgba(255, 70, 105, 0.98)";
+    lineWidth = 1.85;
+  }
+
+  if (item.type === "sine") {
+    glowStrength = 0.52;
+    lineColor = "rgba(255, 95, 190, 0.96)";
+    lineWidth = 1.55;
+  }
+
+  const glow = ctx.createRadialGradient(item.x, item.y, 0, item.x, item.y, r * 3.4);
+  glow.addColorStop(0, `rgba(255, 64, 107, ${glowStrength})`);
+  glow.addColorStop(0.42, "rgba(255, 64, 107, 0.13)");
+  glow.addColorStop(1, "rgba(255, 64, 107, 0)");
+
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(item.x, item.y, r * 3.4, 0, Math.PI * 2);
+  ctx.fill();
+
+  drawLine3D(
+    points,
+    edges,
+    item.x,
+    item.y,
+    r,
+    {
+      x: item.rotationX,
+      y: item.rotationY,
+      z: item.rotationX * 0.45
+    },
+    lineColor,
+    0.95,
+    lineWidth
+  );
+
+  ctx.save();
+
+  if (item.type === "fast") {
+    ctx.strokeStyle = "rgba(255, 205, 220, 0.72)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(item.x - r * 1.4, item.y);
+    ctx.lineTo(item.x + r * 1.4, item.y);
+    ctx.stroke();
+  } else if (item.type === "wide") {
+    ctx.strokeStyle = "rgba(255, 180, 198, 0.66)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(item.x, item.y, r * 0.55, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (item.type === "sine") {
+    ctx.strokeStyle = "rgba(255, 190, 230, 0.68)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(item.x, item.y, r * 0.42, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(item.x, item.y, r * 0.7, 0, Math.PI * 2);
+    ctx.stroke();
+  } else {
+    ctx.strokeStyle = "rgba(255, 180, 198, 0.6)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(item.x, item.y, r * 0.42, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  ctx.restore();
 }
 
-function animate() {
-  const dt = Math.min(clock.getDelta(), 0.033);
-  const time = clock.elapsedTime;
-
-  updateAcaleph(dt, time);
-  updateTentacles(time);
-  updateDust(time);
-  updateRipples(dt);
-
-  updateMood();
-  updateTip();
-  updateProgressDots();
-
-  background.rotation.y += dt * 0.01;
-
-  renderer.render(scene, camera);
-  requestAnimationFrame(animate);
+function drawEnemies() {
+  for (let i = 0; i < enemies.length; i++) {
+    drawWireMine(enemies[i]);
+  }
 }
 
-startButton.addEventListener("click", startExperience);
-restartButton.addEventListener("click", restartExperience);
+function drawPlayer(time) {
+  ctx.save();
 
-infoButton.addEventListener("click", () => {
-  infoPanel.classList.remove("hidden");
+  const flicker = player.invincible > 0 ? Math.sin(time * 32) * 0.5 + 0.5 : 1;
+
+  const side = player.side;
+  const tilt = player.tilt;
+  const r = player.radius;
+  const breathe = Math.sin(time * 3.6) * 1.6;
+  const frontScale = 1 - Math.abs(side) * 0.32;
+  const sideDepth = Math.abs(side) * 0.75;
+  const sideDir = side >= 0 ? 1 : -1;
+
+  ctx.globalAlpha = 0.45 + flicker * 0.55;
+
+  ctx.save();
+
+  for (let i = 0; i < player.tail.length; i++) {
+    const p = player.tail[i];
+    const t = i / player.tail.length;
+    const alpha = p.life * 0.11;
+    const rx = r * (0.36 + t * 0.95);
+    const ry = r * (0.14 + t * 0.34);
+    const offX = p.side * 12 * t;
+
+    ctx.strokeStyle = `rgba(143, 244, 255, ${alpha})`;
+    ctx.lineWidth = 0.9;
+
+    ctx.beginPath();
+    ctx.ellipse(
+      p.x + offX,
+      p.y + t * 5,
+      rx,
+      ry,
+      p.side * 0.45,
+      Math.PI * 0.08,
+      Math.PI * 0.92
+    );
+    ctx.stroke();
+  }
+
+  ctx.restore();
+
+  const glow = ctx.createRadialGradient(player.x, player.y, 0, player.x, player.y, r * 4.8);
+
+  glow.addColorStop(0, "rgba(143, 244, 255, 0.18)");
+  glow.addColorStop(0.35, "rgba(67, 223, 255, 0.09)");
+  glow.addColorStop(1, "rgba(67, 223, 255, 0)");
+
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(player.x, player.y, r * 4.8, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.translate(player.x, player.y);
+  ctx.rotate(tilt * 0.15);
+
+  ctx.strokeStyle = "rgba(210, 252, 255, 0.9)";
+  ctx.lineWidth = 1.35;
+
+  for (let i = 0; i < 7; i++) {
+    const layer = i / 6;
+    const scale = 1 - i * 0.085;
+    const y = -12 + i * 4.9;
+    const width3D = r * 1.24 * scale * frontScale;
+    const height3D = (r * 0.3 + breathe * 0.16) * scale;
+    const offsetX = side * layer * r * 0.52;
+
+    ctx.globalAlpha = 0.92 - i * 0.08;
+
+    ctx.beginPath();
+    ctx.ellipse(
+      offsetX,
+      y,
+      width3D,
+      height3D,
+      side * 0.28,
+      0,
+      Math.PI * 2
+    );
+    ctx.stroke();
+  }
+
+  ctx.strokeStyle = "rgba(143, 244, 255, 0.72)";
+  ctx.lineWidth = 1.05;
+  ctx.globalAlpha = 0.8;
+
+  for (let i = -5; i <= 5; i++) {
+    const n = i / 5;
+
+    const topX = n * r * 1.02 * frontScale - side * r * 0.18;
+    const midX = n * r * 0.64 * frontScale + sideDir * sideDepth * r * (1 - Math.abs(n) * 0.35);
+    const endX = n * r * 0.34 * frontScale + side * r * 0.46;
+
+    ctx.beginPath();
+    ctx.moveTo(topX, -r * 0.58);
+    ctx.bezierCurveTo(
+      midX,
+      -r * 0.2,
+      midX * 0.72,
+      r * 0.08,
+      endX,
+      r * 0.42
+    );
+    ctx.stroke();
+  }
+
+  if (Math.abs(side) > 0.06) {
+    ctx.strokeStyle = "rgba(143, 244, 255, 0.36)";
+    ctx.lineWidth = 0.95;
+    ctx.globalAlpha = Math.abs(side) * 0.42;
+
+    for (let i = 0; i < 4; i++) {
+      const y = -8 + i * 5.6;
+      const scale = 0.88 - i * 0.1;
+      const backOffset = -side * r * 0.55;
+
+      ctx.beginPath();
+      ctx.ellipse(
+        backOffset,
+        y,
+        r * 0.98 * scale * frontScale,
+        r * 0.2 * scale,
+        side * 0.34,
+        0,
+        Math.PI * 2
+      );
+      ctx.stroke();
+    }
+  }
+
+  ctx.strokeStyle = "rgba(190, 250, 255, 0.55)";
+  ctx.lineWidth = 0.9;
+  ctx.globalAlpha = 0.72;
+
+  for (let i = -3; i <= 3; i++) {
+    const n = i / 3;
+    const baseX = n * r * 0.52 * frontScale + side * r * 0.12;
+
+    ctx.beginPath();
+    ctx.moveTo(baseX, r * 0.1);
+    ctx.quadraticCurveTo(
+      baseX + sideDir * sideDepth * r * 0.32,
+      r * 0.32,
+      baseX * 0.55 + side * r * 0.16,
+      r * 0.62
+    );
+    ctx.stroke();
+  }
+
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+  ctx.lineWidth = 0.85;
+  ctx.globalAlpha = 0.5;
+
+  ctx.beginPath();
+  ctx.ellipse(
+    0,
+    -r * 0.08,
+    r * 1.5 * frontScale,
+    r * 0.42,
+    side * 0.24,
+    Math.PI * 1.08,
+    Math.PI * 1.92
+  );
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.ellipse(
+    side * r * 0.18,
+    r * 0.04,
+    r * 1.22 * frontScale,
+    r * 0.34,
+    side * 0.24,
+    Math.PI * 1.05,
+    Math.PI * 1.86
+  );
+  ctx.stroke();
+
+  ctx.strokeStyle = "rgba(143, 244, 255, 0.78)";
+  ctx.lineWidth = 1.15;
+  ctx.globalAlpha = 0.9;
+
+  const tentacleCount = 9;
+
+  for (let i = 0; i < tentacleCount; i++) {
+    const spread = (i - (tentacleCount - 1) / 2) / ((tentacleCount - 1) / 2);
+    const baseX = spread * r * 0.86 * frontScale + side * r * 0.14;
+    const length = 46 + Math.sin(time * 2.1 + i * 0.8) * 8 + i * 2;
+    const swing = Math.sin(time * 2.4 + i * 0.6) * 10 - side * 18;
+
+    ctx.beginPath();
+    ctx.moveTo(baseX, r * 0.38);
+    ctx.bezierCurveTo(
+      baseX + swing * 0.28,
+      r * 0.88,
+      baseX - swing * 0.18 + Math.sin(time * 1.7 + i) * 10,
+      r * 1.45,
+      baseX + swing + Math.cos(time * 1.4 + i) * 10,
+      r * 0.72 + length
+    );
+    ctx.stroke();
+  }
+
+  ctx.strokeStyle = "rgba(220, 250, 255, 0.34)";
+  ctx.lineWidth = 0.7;
+  ctx.globalAlpha = 0.75;
+
+  for (let i = 0; i < 5; i++) {
+    const spread = (i - 2) / 2;
+    const baseX = spread * r * 0.6 * frontScale;
+    const length = 58 + i * 8 + Math.sin(time * 1.6 + i) * 6;
+    const sway = Math.cos(time * 1.8 + i) * 14 - side * 10;
+
+    ctx.beginPath();
+    ctx.moveTo(baseX, r * 0.2);
+    ctx.bezierCurveTo(
+      baseX + sway * 0.25,
+      r * 0.9,
+      baseX - sway * 0.2,
+      r * 1.6,
+      baseX + sway,
+      r * 0.9 + length
+    );
+    ctx.stroke();
+  }
+
+  ctx.strokeStyle = "rgba(235, 255, 255, 0.55)";
+  ctx.lineWidth = 0.95;
+  ctx.globalAlpha = 0.85;
+
+  ctx.beginPath();
+  ctx.moveTo(side * r * 0.08, -r * 0.32);
+  ctx.quadraticCurveTo(
+    side * r * 0.15,
+    0,
+    side * r * 0.06,
+    r * 0.52
+  );
+  ctx.stroke();
+
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.45)";
+  ctx.lineWidth = 0.9;
+  ctx.globalAlpha = Math.abs(side) * 0.72;
+
+  ctx.beginPath();
+  ctx.moveTo(side >= 0 ? r * 0.82 * frontScale : -r * 0.82 * frontScale, -r * 0.42);
+  ctx.bezierCurveTo(
+    side >= 0 ? r * 1.05 : -r * 1.05,
+    -r * 0.16,
+    side >= 0 ? r * 0.9 : -r * 0.9,
+    r * 0.08,
+    side >= 0 ? r * 0.42 : -r * 0.42,
+    r * 0.34
+  );
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawParticles() {
+  ctx.save();
+
+  for (let i = 0; i < particles.length; i++) {
+    const item = particles[i];
+
+    if (item.color === "red") {
+      ctx.fillStyle = `rgba(255, 64, 107, ${item.life})`;
+    } else {
+      ctx.fillStyle = `rgba(143, 244, 255, ${item.life})`;
+    }
+
+    ctx.beginPath();
+    ctx.arc(item.x, item.y, item.radius * item.life, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+function drawDamageFlash() {
+  if (damageFlash <= 0) {
+    return;
+  }
+
+  ctx.save();
+  ctx.globalAlpha = damageFlash * 0.23;
+  ctx.fillStyle = "#ff406b";
+  ctx.fillRect(0, 0, width, height);
+  ctx.restore();
+}
+
+function drawDepthOverlay() {
+  ctx.save();
+
+  const alpha = clamp(depth / 1600, 0, 0.56);
+  ctx.fillStyle = `rgba(0, 2, 10, ${alpha})`;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.restore();
+}
+
+function render(time) {
+  ctx.save();
+
+  if (screenShake > 0) {
+    ctx.translate(random(-screenShake, screenShake), random(-screenShake, screenShake));
+  }
+
+  drawBackground(time);
+  drawBubbles();
+  drawLights();
+  drawEnemies();
+  drawParticles();
+  drawPlayer(time);
+  drawDepthOverlay();
+
+  ctx.restore();
+
+  drawDamageFlash();
+}
+
+function gameLoop(timestamp) {
+  if (!lastTime) {
+    lastTime = timestamp;
+  }
+
+  const dt = Math.min((timestamp - lastTime) / 1000, 0.033);
+  lastTime = timestamp;
+
+  const time = timestamp / 1000;
+
+  if (gameState === "playing") {
+    updateGame(dt, time);
+  } else {
+    updateCurrents(dt);
+    updateBubbles(dt);
+    updateParticles(dt);
+
+    if (bubbles.length < 28) {
+      spawnBubble();
+    }
+
+    player.x += (width / 2 - player.x) * 0.03;
+    player.y += (height * 0.68 - player.y) * 0.03;
+  }
+
+  render(time);
+
+  requestAnimationFrame(gameLoop);
+}
+
+function setTargetFromEvent(event) {
+  const rect = canvas.getBoundingClientRect();
+
+  player.targetX = clamp(event.clientX - rect.left, 32, width - 32);
+  player.targetY = clamp(event.clientY - rect.top, 92, height - 92);
+}
+
+canvas.addEventListener("pointerdown", event => {
+  if (gameState === "playing") {
+    setTargetFromEvent(event);
+  }
 });
 
-closeInfo.addEventListener("click", () => {
-  infoPanel.classList.add("hidden");
+canvas.addEventListener("pointermove", event => {
+  if (gameState === "playing") {
+    setTargetFromEvent(event);
+  }
 });
 
-canvas.addEventListener("pointerdown", handlePointerDown);
-canvas.addEventListener("pointermove", handlePointerMove);
-canvas.addEventListener("pointerup", handlePointerUp);
-canvas.addEventListener("pointercancel", handlePointerUp);
+canvas.addEventListener("touchmove", event => {
+  event.preventDefault();
+}, { passive: false });
 
-window.addEventListener("resize", resize);
+window.addEventListener("keydown", event => {
+  const key = event.key.toLowerCase();
 
-animate();
+  if (event.key === "ArrowLeft" || key === "a") keys.left = true;
+  if (event.key === "ArrowRight" || key === "d") keys.right = true;
+  if (event.key === "ArrowUp" || key === "w") keys.up = true;
+  if (event.key === "ArrowDown" || key === "s") keys.down = true;
+});
+
+window.addEventListener("keyup", event => {
+  const key = event.key.toLowerCase();
+
+  if (event.key === "ArrowLeft" || key === "a") keys.left = false;
+  if (event.key === "ArrowRight" || key === "d") keys.right = false;
+  if (event.key === "ArrowUp" || key === "w") keys.up = false;
+  if (event.key === "ArrowDown" || key === "s") keys.down = false;
+});
+
+startButton.addEventListener("click", startGame);
+restartButton.addEventListener("click", startGame);
+
+window.addEventListener("resize", resizeCanvas);
+
+resizeCanvas();
+requestAnimationFrame(gameLoop);

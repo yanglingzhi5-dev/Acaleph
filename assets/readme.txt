@@ -1,1 +1,0 @@
-Assets folder for future sounds, icons, and images.
