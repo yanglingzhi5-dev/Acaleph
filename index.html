@@ -2,100 +2,120 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 
-  <title>Soft Contact</title>
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+  />
+
+  <title>ACALEPH</title>
 
   <link rel="stylesheet" href="style.css" />
 
   <script type="importmap">
     {
       "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.182.0/build/three.module.js"
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
       }
     }
   </script>
 </head>
 
 <body>
-  <main id="app">
-    <canvas id="experience"></canvas>
+  <main class="app">
+    <canvas id="scene"></canvas>
 
-    <section id="startScreen" class="screen">
-      <div class="intro-card">
-        <p class="eyebrow">Mobile 3D Interactive Artwork</p>
-        <h1>Soft Contact</h1>
-        <p class="intro-text">
-          Touch softly. It remembers pressure.
+    <section id="intro" class="intro">
+      <div class="intro-glow"></div>
+
+      <div class="intro-content">
+        <p class="tag">Interactive Mobile Experience</p>
+
+        <h1>ACALEPH</h1>
+
+        <p class="subtitle">
+          A tiny glowing jellyfish living inside your screen.
         </p>
 
-        <button id="startBtn" class="primary-btn">Start Experience</button>
+        <button id="startButton" class="main-button">
+          Wake it up
+        </button>
 
-        <p class="hint">
-          Best experienced on phone.  
-          Tap, hold, swipe slowly, or use two fingers.
+        <p class="small-note">
+          Touch gently. Hold to calm it. Move slowly to guide it.
         </p>
       </div>
     </section>
 
-    <section id="endingScreen" class="screen hidden">
-      <div class="intro-card ending-card">
-        <p class="eyebrow">Bloom Form Generated</p>
-        <h2>You learned how to be near.</h2>
-        <p class="intro-text">
-          This digital creature did not open because you controlled it.
-          It opened because your touch became softer.
+    <section id="result" class="result hidden">
+      <div class="result-card">
+        <p class="tag">Final Form</p>
+
+        <h2 id="resultTitle">Gentle Bloom</h2>
+
+        <p id="resultText">
+          Your touch made Acaleph feel safe enough to glow.
         </p>
 
-        <button id="restartBtn" class="primary-btn">Restart</button>
+        <div class="result-stats">
+          <div>
+            <span>Trust</span>
+            <strong id="finalTrust">0%</strong>
+          </div>
+
+          <div>
+            <span>Mood</span>
+            <strong id="finalMood">Calm</strong>
+          </div>
+        </div>
+
+        <button id="restartButton" class="main-button">
+          Play again
+        </button>
       </div>
     </section>
 
-    <div id="hud" class="hud hidden">
+    <header id="topUI" class="top-ui hidden">
       <div>
-        <p class="hud-label">State</p>
-        <p id="stateText" class="hud-value">Unknown</p>
+        <p class="mini-label">ACALEPH</p>
+        <h2 id="moodTitle">Still asleep</h2>
       </div>
 
-      <div class="meter-group">
-        <div class="meter-row">
-          <span>Trust</span>
-          <div class="meter"><div id="trustBar"></div></div>
-        </div>
+      <button id="infoButton" class="circle-button">?</button>
+    </header>
 
-        <div class="meter-row">
-          <span>Fear</span>
-          <div class="meter"><div id="fearBar"></div></div>
-        </div>
-
-        <div class="meter-row">
-          <span>Open</span>
-          <div class="meter"><div id="openBar"></div></div>
-        </div>
-      </div>
+    <div id="progressRing" class="progress-ring hidden">
+      <span></span>
+      <span></span>
+      <span></span>
+      <span></span>
+      <span></span>
+      <span></span>
+      <span></span>
+      <span></span>
     </div>
 
-    <div id="instruction" class="instruction hidden">
-      <p id="instructionText">Move slowly. Let it notice you.</p>
+    <div id="tip" class="tip hidden">
+      <p id="tipText">Move slowly. It is watching your touch.</p>
     </div>
 
-    <button id="aboutBtn" class="about-btn hidden">About</button>
+    <aside id="infoPanel" class="info-panel hidden">
+      <button id="closeInfo" class="close-button">×</button>
 
-    <div id="aboutPanel" class="about-panel hidden">
-      <button id="closeAbout" class="close-btn">×</button>
-      <h2>Soft Contact</h2>
+      <p class="tag">About</p>
+
+      <h2>ACALEPH</h2>
+
       <p>
-        Soft Contact is a mobile-first 3D interactive artwork about touch,
-        trust, pressure, and digital life.
+        Acaleph is a mobile-first interactive artwork. It turns touch into
+        trust, fear, movement, and glow.
       </p>
+
       <p>
-        The creature reacts differently to gentle touch, fast movement,
-        holding, stillness, and two-finger gestures.
+        Try gentle taps, slow movement, long holds, and stillness. If you move
+        too fast, it becomes afraid.
       </p>
-      <p class="small">
-        Try not to force it. Stay close. Move slowly.
-      </p>
-    </div>
+    </aside>
   </main>
 
   <script type="module" src="script.js"></script>
