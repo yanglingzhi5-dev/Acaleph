@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+
+  <title>Soft Contact</title>
+
+  <link rel="stylesheet" href="style.css" />
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.182.0/build/three.module.js"
+      }
+    }
+  </script>
+</head>
+
+<body>
+  <main id="app">
+    <canvas id="experience"></canvas>
+
+    <section id="startScreen" class="screen">
+      <div class="intro-card">
+        <p class="eyebrow">Mobile 3D Interactive Artwork</p>
+        <h1>Soft Contact</h1>
+        <p class="intro-text">
+          Touch softly. It remembers pressure.
+        </p>
+
+        <button id="startBtn" class="primary-btn">Start Experience</button>
+
+        <p class="hint">
+          Best experienced on phone.  
+          Tap, hold, swipe slowly, or use two fingers.
+        </p>
+      </div>
+    </section>
+
+    <section id="endingScreen" class="screen hidden">
+      <div class="intro-card ending-card">
+        <p class="eyebrow">Bloom Form Generated</p>
+        <h2>You learned how to be near.</h2>
+        <p class="intro-text">
+          This digital creature did not open because you controlled it.
+          It opened because your touch became softer.
+        </p>
+
+        <button id="restartBtn" class="primary-btn">Restart</button>
+      </div>
+    </section>
+
+    <div id="hud" class="hud hidden">
+      <div>
+        <p class="hud-label">State</p>
+        <p id="stateText" class="hud-value">Unknown</p>
+      </div>
+
+      <div class="meter-group">
+        <div class="meter-row">
+          <span>Trust</span>
+          <div class="meter"><div id="trustBar"></div></div>
+        </div>
+
+        <div class="meter-row">
+          <span>Fear</span>
+          <div class="meter"><div id="fearBar"></div></div>
+        </div>
+
+        <div class="meter-row">
+          <span>Open</span>
+          <div class="meter"><div id="openBar"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="instruction" class="instruction hidden">
+      <p id="instructionText">Move slowly. Let it notice you.</p>
+    </div>
+
+    <button id="aboutBtn" class="about-btn hidden">About</button>
+
+    <div id="aboutPanel" class="about-panel hidden">
+      <button id="closeAbout" class="close-btn">×</button>
+      <h2>Soft Contact</h2>
+      <p>
+        Soft Contact is a mobile-first 3D interactive artwork about touch,
+        trust, pressure, and digital life.
+      </p>
+      <p>
+        The creature reacts differently to gentle touch, fast movement,
+        holding, stillness, and two-finger gestures.
+      </p>
+      <p class="small">
+        Try not to force it. Stay close. Move slowly.
+      </p>
+    </div>
+  </main>
+
+  <script type="module" src="script.js"></script>
+</body>
+</html>
